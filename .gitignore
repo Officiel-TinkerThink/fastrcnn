@@ -1,0 +1,11 @@
+__pycache__
+*.pyc
+
+# --
+*.log
+# --
+
+# --
+dataset/VOC2007
+dataset/VOC2007-test
+# --

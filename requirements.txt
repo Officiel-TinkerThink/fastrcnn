@@ -1,0 +1,10 @@
+#---
+pillow
+xml
+#---
+
+tqdm
+# --
+torch
+torchvision
+# -- 
