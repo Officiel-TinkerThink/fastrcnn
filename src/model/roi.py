@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 from src.utils import *
+import torchvision
 
 class ROIHead(nn.Module):
   """
@@ -33,14 +34,14 @@ class ROIHead(nn.Module):
     below_low_threshold = best_match_iou < 0.5
     best_match_gt_index[below_low_threshold] = -1
     # best match index is either valid or -1(backgroud)
-    matched_gt_boxes_for_proposals = gt_boxes[best_match_gt_index.clamp(min=0)]
+    matched_gt_boxes_for_proposals = gt_boxes[best_match_gt_index.clamp(min=0)] # temporarily assign the background to the gt_boxes 0
 
-    labels = gt_labels[best_match_gt_index.clamp(min=0)]
-    labels = labels.to(dtype=torch.int64)
+    labels = gt_labels[best_match_gt_index.clamp(min=0)] # the labels not contains any zero value
+    labels = labels.to(dtype=torch.int64) # none of the labels has value zero
 
     # set all background labels as 0
     background_proposals = best_match_gt_index == -1
-    labels[background_proposals] = 0
+    labels[background_proposals] = 0 # assigning the backrground proposals to have zero value
 
     # Later for classification we pick labels which have >= 0
     return labels, matched_gt_boxes_for_proposals
@@ -70,6 +71,7 @@ class ROIHead(nn.Module):
     keep_indices = torch.where(keep_mask)[0]
     post_nms_keep_indices = keep_indices[pred_scores[keep_indices].sort(descending=True)[1]]
     keep = post_nms_keep_indices[:100]
+    # keep the boxes with the 100 highest probabilty
     pred_boxes, pred_scores, pred_labels = pred_boxes[keep], pred_scores[keep], pred_labels[keep]
 
     return pred_boxes, pred_scores, pred_labels
@@ -108,7 +110,7 @@ class ROIHead(nn.Module):
 
     # ROI pooling part
     # spatial scale for roi pooling
-    # for vgg16 this would be 1/26
+    # for vgg16 this would be 1/16
     spatial_scale = 0.0625
 
     proposal_roi_pool_feats = torchvision.ops.roi_pool(
@@ -149,7 +151,7 @@ class ROIHead(nn.Module):
       frcnn_output['frcnn_localization_loss'] = localization_loss
       return frcnn_output
     else:
-      # Aplly tranformation predictions to proposals
+      # Apply tranformation predictions to proposals
       pred_boxes = apply_regression_pred_to_anchors_or_proposals(
         bbox_transform_pred,
         proposals
@@ -168,10 +170,15 @@ class ROIHead(nn.Module):
       pred_scores = pred_scores[:, 1:]
       pred_labels = pred_labels[:, 1:]
       # pred_boxes -> (num_proposals, num_classes-1, 4)
+      # pred_scores -> (num_proposals, num_classes -1)
+      # pred_labels -> (num_proposals, num_classes -1)
 
       pred_boxes = pred_boxes.reshape(-1, 4)
       pred_scores = pred_scores.reshape(-1)
       pred_labels = pred_labels.reshape(-1)
+      # pred_boxes -> (num_proposal * num_classes, 4)
+      # pred_boxes -> (num_proposal * num_classes)
+      # pred_boxes -> (num_proposal * num_classes)
 
       # filter proposals
       pred_boxes, pred_scores, pred_labels = self.filter_prediction(pred_boxes,

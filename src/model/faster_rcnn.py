@@ -12,7 +12,7 @@ class FasterRCNN(nn.Module):
     self.backbone = vgg16.features[:-1]
     self.rpn = RegionProposalNetwork()
     self.roi_head = ROIHead(num_classes, in_channels=512)
-    for layer in slef.backbone[:10]:
+    for layer in slef.backbone[:10]: # freeze first 10 layers, the rest is trainable
       for p in layer.parameters():
         p.requires_grad = False
     
@@ -33,6 +33,7 @@ class FasterRCNN(nn.Module):
     im_shape = torch.tensor(image.shape[-2:])
     min_size = torch.min(im_shape).to(dtype=torch.float32)
     max_size = torch.max(im_shape).to(dtype=torch.float32)
+    # the below is to scaling the image into the range of [600 for shorter side, 1000 for longer side]
     scale = torch.min(float(self.min_size) / min_size, float(self.max_size) / max_size)
     scale_factor = scale.item()
     # Resize image based on scale

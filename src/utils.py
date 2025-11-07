@@ -4,29 +4,32 @@ def apply_regression_pred_to_anchors_or_proposals(
   box_transform_pred, anchors_or_proposals):
   """
   :param box_transform_pred: (num_anchors_or_proposal, num_classes, 4)
-  :param anchors_or_proposals: (num_anchors_or_proposal, num_classes, 4)
+  :param anchors_or_proposals: (num_anchors_or_proposal, 4)
   :return: pred_boxes: (num_anchors_or_proposal, num_classes, 4)
   """
   box_tranform_pred = box_transform_pred.reshape(box_transform_pred.size(0), -1, 4)
 
-  # get xs, cy, w, h from x1, y1, x2, y2
+  # get xs, cy, w, h from x1, y1, x2, y2 of anchors
   w = anchors_or_proposals[:, 2] - anchors_or_proposals[:, 0]
   h = anchors_or_proposals[:, 3] - anchors_or_proposals[:, 1]
   center_x = anchors_or_proposals[:, 0] + 0.5 * w
   center_y = anchors_or_proposals[:, 1] + 0.5 * h
 
+  # get the dx, dy, dw, dh from box_pred (this is not true dimension, but rather transformation coefficient)
   dx = box_tranform_pred[:, 0]
   dy = box_tranform_pred[:, 1]
   dw = box_tranform_pred[:, 2]
   dh = box_tranform_pred[:, 3]
   # dh -> (num_anchors_or_proposals, num_classes)
 
+  # this predict center and w, h of the bbox of image
   pred_center_x = dx * w[:, None] + center_x[:, None]
   pred_center_y = dy * h[:, None] + center_y[:, None]
   pred_w = torch.exp(dw) * w[:, None]
   pred_h = torch.exp(dh) * h[:, None]
   # pred_center_x -> (num_anchors_or_proposals, num_classes)
 
+  # convert that to x1,y1, x2, y2 format
   pred_boxes_x1 = pred_center_x - 0.5 * pred_w
   pred_boxes_y1 = pred_center_y - 0.5 * pred_h
   pred_boxes_x2 = pred_center_x + 0.5 * pred_w
