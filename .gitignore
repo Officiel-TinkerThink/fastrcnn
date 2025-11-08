@@ -9,9 +9,15 @@ logs
 # --
 dataset/VOC2007
 dataset/VOC2007-test
+dataset/VOC2007_sampling
 # --
 
 # --
 notebook
+# --
+
+# --
+samples
+voc
 # --
 

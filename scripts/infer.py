@@ -6,7 +6,7 @@ import random
 import os
 import yaml
 from tqdm import tqdm
-from model.faster_rcnn import FasterRCNN
+from src.model.faster_rcnn import FasterRCNN
 from dataset.dataset import VOCDataset
 from torch.utils.data.dataloader import DataLoader
 
@@ -158,7 +158,6 @@ def load_model_and_dataset(args):
     except yaml.YAMLError as exc:
       print(exc)
   
-  print(config)
   dataset_config = config['dataset_params']
   model_config = config['model_params']
   train_config = config['train_params']
@@ -169,11 +168,11 @@ def load_model_and_dataset(args):
   random.seed(seed)
   if device == 'cuda':
       torch.cuda.manual_seed_all(seed)
-  
+
   voc = VOCDataset('test', im_dir=dataset_config['im_test_path'], ann_dir=dataset_config['ann_test_path'])
   test_dataset = DataLoader(voc, batch_size=1, shuffle=False)
-  
-  faster_rcnn_model = FasterRCNN(model_config, num_classes=dataset_config['num_classes'])
+
+  faster_rcnn_model = FasterRCNN(num_classes=dataset_config['num_classes'], model_config=model_config)
   faster_rcnn_model.eval()
   faster_rcnn_model.to(device)
   faster_rcnn_model.load_state_dict(torch.load(os.path.join(train_config['task_name'],
@@ -189,8 +188,8 @@ def infer(args):
   # Hard coding the low score threshold for inference on images for now
   # should come from config = 0.7
 
-  for sample_count in tqdm(range(10)):
-    random_idx = random.randint(0, len(voc))
+  for sample_count in tqdm(range(args.num_samples)):
+    random_idx = random.randint(0, len(voc)-1)
     im, target, fname = voc[random_idx]
     im = im.unsqueeze(0).float().to(device)
     
@@ -204,11 +203,11 @@ def infer(args):
       
       cv2.rectangle(gt_im, (x1,y1), (x2,y2), thickness=2, color=[0,255,0])
       cv2.rectangle(gt_im_copy, (x1,y1), (x2,y2), thickness=2, color=[0,255,0])
-      text = voc.idx2label[target['labels'][idx].detach().cpu().numpy()]
+      text = voc.idx2label[target['labels'][idx].detach().cpu().item()]
       text_size, _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_PLAIN, 1, 1)
       text_w, text_h = text_size
       cv2.rectangle(gt_im_copy, (x1,y1), (x1+10+text_w,y1+text_h+10), [255,255,255], -1)
-      cv2.putText(gt_im, text=voc.idx2label[target['labels'][idx].detach().cpu().item()],
+      cv2.putText(gt_im, text=text,
                   org=(x1+5, y1+15), 
                   thickness=1,
                   fontScale=1,
@@ -306,6 +305,8 @@ if __name__ == '__main__':
   parser.add_argument('--evaluate', dest='evaluate', default=False, type=bool)
   parser.add_argument('--infer_samples', dest='infer_samples',
                       default=True, type=bool)
+  parser.add_argument('--num_samples', dest='num_samples',
+                      default=1, type=int)
   args = parser.parse_args()
 
   if args.infer_samples:

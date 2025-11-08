@@ -1,14 +1,23 @@
 import torch
 import torch.nn as nn
+import torchvision
 from src.utils import *
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 class RegionProposalNetwork(nn.Module):
-  def __init__(self, in_channels=512):
+  def __init__(self, in_channels, scales, aspect_ratios, model_config):
     super().__init__()
-    self.scales = [128, 256, 512] # this is the area of anchor
-    self.aspect_ratios = [0.5, 1, 2] # this is the ratio between length and width
+    self.scales = scales # this is the area of anchor
+    self.low_iou_threshold = model_config['rpn_bg_threshold']
+    self.high_iou_threshold = model_config['rpn_fg_threshold']
+    self.rpn_nms_threshold = model_config['rpn_nms_threshold']
+    self.rpn_batch_size = model_config['rpn_batch_size']
+    self.rpn_pos_count = int(model_config['rpn_pos_fraction'] * self.rpn_batch_size)
+    self.rpn_topk = model_config['rpn_train_topk'] if self.training else model_config['rpn_test_topk']
+    self.rpn_prenms_topk = model_config['rpn_train_prenms_topk'] if self.training else model_config['rpn_test_prenms_topk']
+    self.beta = model_config["beta_num"] / model_config["beta_den"]
+    self.aspect_ratios = aspect_ratios # this is the ratio between length and width
     self.num_anchors = len(self.scales) * len(self.aspect_ratios)
 
     # 3x3 conv
@@ -39,23 +48,23 @@ class RegionProposalNetwork(nn.Module):
     # Pre NMS Filtering
     cls_scores = cls_scores.reshape(-1) # flatten
     cls_scores = torch.sigmoid(cls_scores) # convert logits to probability
-    _, top_n_idx = cls_scores.topk(10000) # get the index of topk probability
+    _, top_n_idx = cls_scores.topk(min(self.rpn_prenms_topk, cls_scores.numel())) # get the index of topk probability
     cls_scores = cls_scores[top_n_idx] # get the scores of that top
     proposals = proposals[top_n_idx] # get the proposals of that top, becasue the order is the same as cls_scores
 
     proposals = clamp_boxes_to_image_boundary(proposals, image_shape) # self-explain
 
     # NMS based on objectness
-    keep_indices = torch.ops.torchvision.nms(proposals,
+    keep_indices = torchvision.ops.nms(proposals,
                                              cls_scores,
-                                             iou_threshold=0.7)
+                                             iou_threshold=self.rpn_nms_threshold)
 
     post_nms_keep_indices = keep_indices[
       cls_scores[keep_indices].sort(descending=True)[1]
     ]
 
-    proposals = proposals[post_nms_keep_indices[:2000]]
-    cls_scores = cls_scores[post_nms_keep_indices[:2000]]
+    proposals = proposals[post_nms_keep_indices[:self.rpn_topk]]
+    cls_scores = cls_scores[post_nms_keep_indices[:self.rpn_topk]]
 
     return proposals, cls_scores
 
@@ -127,8 +136,8 @@ class RegionProposalNetwork(nn.Module):
 
     # this would classify the anchors as background, foreground or to ignore based on
     # for the best_mathc with value below 0.7 means they are not strong enough to be foreground
-    below_low_threshold = best_match_iou < 0.3
-    between_threshold = (best_match_iou >= 0.3) & (best_match_iou < 0.7)
+    below_low_threshold = best_match_iou < self.low_iou_threshold
+    between_threshold = (best_match_iou >= self.low_iou_threshold) & (best_match_iou < self.high_iou_threshold)
     best_match_gt_index[below_low_threshold] = -1 # masking them by -1, or -2 so that they are recognized as different
     best_match_gt_index[between_threshold] = -2
 
@@ -178,7 +187,7 @@ class RegionProposalNetwork(nn.Module):
 
     # bbox_transform_pred -> (Batch, Number of Anchors per location * 4, H_feat, W_feat)
     bbox_transform_pred = bbox_transform_pred.permute(0, 2, 3, 1)
-    bbox_transform_pred = bbox_transform_pred.view(bbox_transform_pred.size(0), 
+    bbox_transform_pred = bbox_transform_pred.reshape(bbox_transform_pred.size(0), 
                                                     num_of_anchors_per_location,
                                                     4, 
                                                     rpn_feat.shape[-2],
@@ -219,14 +228,14 @@ class RegionProposalNetwork(nn.Module):
       # Sample positive and negative anchors
       sampled_neg_idx_mask, sampled_pos_idx_mask = sample_positive_negative(
         labels_for_anchors,
-        positive_count=128,
-        total_count=256)
+        positive_count=self.rpn_pos_count,
+        total_count=self.rpn_batch_size)
       sampled_idxs = torch.where(sampled_pos_idx_mask | sampled_neg_idx_mask)[0]
       localization_loss = (
         torch.nn.functional.smooth_l1_loss(
           bbox_transform_pred[sampled_pos_idx_mask],
           regression_targets[sampled_pos_idx_mask],
-          beta=1/9,
+          beta=self.beta,
           reduction='sum'
         ) / (sampled_idxs.numel())
       )
@@ -237,7 +246,7 @@ class RegionProposalNetwork(nn.Module):
       )
 
       rpn_output['rpn_classification_loss'] = cls_loss
-      rpn_output['rpn_regression_loss'] = localization_loss
+      rpn_output['rpn_localization_loss'] = localization_loss
       return rpn_output
 
       

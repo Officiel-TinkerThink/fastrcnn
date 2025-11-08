@@ -6,20 +6,23 @@ import torchvision
 from src.utils import transform_boxes_to_original_size
 
 class FasterRCNN(nn.Module):
-  def __init__(self, num_classes=21):
+  def __init__(self, num_classes, model_config):
     super().__init__()
     vgg16 = torchvision.models.vgg16(pretrained=True)
     self.backbone = vgg16.features[:-1]
-    self.rpn = RegionProposalNetwork()
-    self.roi_head = ROIHead(num_classes, in_channels=512)
-    for layer in slef.backbone[:10]: # freeze first 10 layers, the rest is trainable
+    self.rpn = RegionProposalNetwork(model_config['backbone_out_channels'],
+                                      scales=model_config['scales'],
+                                      aspect_ratios=model_config['aspect_ratios'],
+                                      model_config=model_config)
+    self.roi_head = ROIHead(model_config, num_classes, in_channels=model_config['backbone_out_channels'])
+    for layer in self.backbone[:10]: # freeze first 10 layers, the rest is trainable
       for p in layer.parameters():
         p.requires_grad = False
     
-    self.image_mean = [0.485, 0.456, 0.406]
-    self.image_std = [0.229, 0.224, 0.225]
-    self.min_size = 600
-    self.max_size = 1000
+    self.image_mean = model_config['image_mean']
+    self.image_std = model_config['image_std']
+    self.min_size = model_config["min_im_size"]
+    self.max_size = model_config["max_im_size"]
 
   def normalize_resize_image_and_boxes(self, image, bboxes):
     # normalize
@@ -75,22 +78,22 @@ class FasterRCNN(nn.Module):
         image, None
       )
 
-      # call backbone
-      feat = self.backbone(image)
+    # call backbone
+    feat = self.backbone(image)
 
-      # call RPN and get proposals
-      rpn_output = self.rpn(image, feat, target)
-      proposals = rpn_output['proposals']
+    # call RPN and get proposals
+    rpn_output = self.rpn(image, feat, target)
+    proposals = rpn_output['proposals']
 
-      # Call ROI head and convert proposals to boxes
-      frcnn_output = self.roi_head(feat, proposals, image.shape[:2:])
+    # Call ROI head and convert proposals to boxes
+    frcnn_output = self.roi_head(feat, proposals, image.shape[-2:], target)
 
-      if not self.training:
-        # transform boxes to original image dimension
-        frcnn_output['boxes'] = transform_boxes_to_original_size(frcnn_output['boxes'],
-          image.shape[-2:], 
-          old_shape
-        )
+    if not self.training:
+      # transform boxes to original image dimension
+      frcnn_output['boxes'] = transform_boxes_to_original_size(frcnn_output['boxes'],
+        image.shape[-2:], 
+        old_shape
+      )
       
-      return rpn_output, frcnn_output
+    return rpn_output, frcnn_output
 

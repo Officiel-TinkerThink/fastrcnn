@@ -8,3 +8,4 @@ tqdm
 torch
 torchvision
 # -- 
+PyYAML==6.0.1

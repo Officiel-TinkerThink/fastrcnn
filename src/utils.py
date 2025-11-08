@@ -16,10 +16,10 @@ def apply_regression_pred_to_anchors_or_proposals(
   center_y = anchors_or_proposals[:, 1] + 0.5 * h
 
   # get the dx, dy, dw, dh from box_pred (this is not true dimension, but rather transformation coefficient)
-  dx = box_tranform_pred[:, 0]
-  dy = box_tranform_pred[:, 1]
-  dw = box_tranform_pred[:, 2]
-  dh = box_tranform_pred[:, 3]
+  dx = box_tranform_pred[..., 0]
+  dy = box_tranform_pred[..., 1]
+  dw = box_tranform_pred[..., 2]
+  dh = box_tranform_pred[..., 3]
   # dh -> (num_anchors_or_proposals, num_classes)
 
   # this predict center and w, h of the bbox of image

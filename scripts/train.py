@@ -4,7 +4,8 @@ import os
 import numpy as np
 import yaml
 import random
-from model.faster_rcnn import FasterRCNN
+import sys
+from src.model.faster_rcnn import FasterRCNN
 from tqdm import tqdm
 from dataset.dataset import VOCDataset
 from torch.utils.data.dataloader import DataLoader
@@ -50,7 +51,7 @@ def train(args):
   )
 
   # set the model
-  faster_rcnn_model = FasterRCNN(model_config, num_classes=dataset_config['num_classes'])
+  faster_rcnn_model = FasterRCNN(num_classes=dataset_config['num_classes'], model_config=model_config)
   faster_rcnn_model.train()
   faster_rcnn_model.to(device)
 
@@ -83,6 +84,7 @@ def train(args):
       frcnn_loss = frcnn_output['frcnn_classification_loss'] + frcnn_output['frcnn_localization_loss']
       loss = rpn_loss + frcnn_loss
 
+
       rpn_classification_losses.append(rpn_output['rpn_classification_loss'].item())
       rpn_localization_losses.append(rpn_output['rpn_localization_loss'].item())
       frcnn_classification_losses.append(frcnn_output['frcnn_classification_loss'].item())
@@ -113,5 +115,6 @@ if __name__ == '__main__':
   parser = argparse.ArgumentParser(description='Faster R-CNN Training')
   parser.add_argument('--config', dest='config_path', 
                       default='config/voc.yaml', type=str)
+  parser.add_argument('--trial_mode', dest='trial_mode', default=False, type=bool)
   args = parser.parse_args()
   train(args)

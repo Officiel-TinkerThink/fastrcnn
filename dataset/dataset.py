@@ -65,7 +65,7 @@ class VOCDataset(Dataset):
     classes = ['background'] + classes
     self.label2idx = {classes[idx]: idx for idx in range(len(classes))}
     self.idx2label = {idx: classes[idx] for idx in range(len(classes))}
-    print(self.idx2label)
+    # print(self.idx2label)
     self.images_info = load_images_and_anns(im_dir, ann_dir, self.label2idx)
 
   def __len__(self):
@@ -78,7 +78,7 @@ class VOCDataset(Dataset):
     if self.split == 'train' and random.random() < 0.5:
       to_flip = True
       im = im.transpose(Image.FLIP_LEFT_RIGHT)
-    im_tensor = torch.transforms.ToTensor()(im)
+    im_tensor = torchvision.transforms.ToTensor()(im)
     targets = {}
     targets['bboxes'] = torch.as_tensor([detection['bbox'] for detection in im_info['detections']])
     targets['labels'] = torch.as_tensor([detection['label'] for detection in im_info['detections']]) # labels here is numbers between 0 to num_classes (0 as background)
@@ -90,4 +90,4 @@ class VOCDataset(Dataset):
         x1 = im_w - x1 - w
         x2 = x1 + w
         targets['bboxes'][idx] = torch.as_tensor([x1, y1, x2, y2])
-    return im_tensor,targets, im_info['filename']  
+    return im_tensor, targets, im_info['filename']  
