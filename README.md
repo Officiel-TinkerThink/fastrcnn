@@ -4,6 +4,8 @@ Faster R-CNN Implementation in Pytorch
 This repository implements with training, inference and map evaluation in pytorch.
 the aim of this simple implementations is to learn and understand the low level concept of the faster r-cnn.
 
+This repo focus on implementation, not on perfomance and metric due to limited hardware resources. It's a fully working pipeline for training and inference, but not yet optimized and having a documented metric performance yet due to that limitation.
+
 The implementation caters to batch size of 1 only and uses roi pooling on single scale feature map.
 The repo is meant to train faster r-cnn on voc dataset. Specifically trained on VOC 2007 dataset.
 
